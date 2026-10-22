@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>CRS Portal · Interactive Workflow Explorer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --navy: #12334b;
+      --teal: #087e83;
+      --teal-dark: #075e65;
+      --muted: #5c6e7e;
+      --line: #d8e3e8;
+      --paper: #ffffff;
+      --wash: #f3f8f8;
+      --gold: #bf8428;
+      --shadow: 0 14px 40px rgba(16, 50, 67, .09);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef4f5; color: var(--navy); }
+    .shell { width: min(1680px, calc(100% - 36px)); margin: 24px auto; }
+    .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+    .eyebrow { margin: 0 0 8px; color: var(--teal); font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 0; color: var(--navy); font-size: clamp(26px, 3vw, 38px); line-height: 1.08; letter-spacing: -.035em; }
+    .lede { max-width: 780px; margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .doc-link { flex: none; color: var(--teal-dark); font-size: 13px; font-weight: 750; text-decoration: none; border-bottom: 1px solid #9bc7c8; padding-bottom: 4px; }
+    .doc-link:hover { color: #034b53; border-color: currentColor; }
+    .panel { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); box-shadow: var(--shadow); }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: #fbfdfd; }
+    .selector-group { display: grid; gap: 5px; min-width: min(100%, 290px); margin-right: auto; }
+    label { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    select, button { min-height: 38px; border: 1px solid #cad9df; border-radius: 9px; background: #fff; color: var(--navy); font: inherit; }
+    select { padding: 0 34px 0 11px; font-size: 13px; font-weight: 700; }
+    button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; cursor: pointer; font-size: 13px; font-weight: 750; transition: background .15s, border-color .15s, transform .15s; }
+    button:hover { border-color: #80b8bb; background: #f0f8f8; }
+    button:active { transform: translateY(1px); }
+    button:focus-visible, select:focus-visible, input:focus-visible, .viewport:focus-visible { outline: 3px solid rgba(8, 126, 131, .25); outline-offset: 2px; }
+    .control-cluster { display: flex; align-items: center; gap: 7px; }
+    .zoom-readout { min-width: 48px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 750; }
+    input[type="range"] { width: 112px; accent-color: var(--teal); }
+    .divider { width: 1px; height: 28px; margin: 0 2px; background: var(--line); }
+    .panpad { display: grid; grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(2, 31px); gap: 3px; }
+    .panpad button { min-height: 31px; padding: 0; border-radius: 7px; font-size: 15px; }
+    .panpad .up { grid-column: 2; grid-row: 1; }
+    .panpad .left { grid-column: 1; grid-row: 2; }
+    .panpad .down { grid-column: 2; grid-row: 2; }
+    .panpad .right { grid-column: 3; grid-row: 2; }
+    .view-note { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; color: var(--muted); font-size: 12px; }
+    .view-note strong { color: #2d5662; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .swatch { width: 9px; height: 9px; border-radius: 3px; background: var(--teal); }
+    .swatch.decision { background: var(--gold); }
+    .swatch.state { background: #43815f; }
+    .swatch.mail { background: #7966a3; }
+    .viewport { position: relative; width: 100%; height: min(76vh, 980px); min-height: 590px; overflow: hidden; border-top: 1px solid var(--line); background-color: #f8fbfc; background-image: radial-gradient(#d7e2e7 1px, transparent 1px); background-size: 22px 22px; cursor: grab; touch-action: none; }
+    .viewport.is-panning { cursor: grabbing; }
+    #diagram { position: absolute; inset: 0 auto auto 0; transform-origin: 0 0; will-change: transform; }
+    #diagram svg { display: block; max-width: none !important; height: auto; overflow: visible; }
+    .loading { position: absolute; inset: 0; display: grid; place-items: center; padding: 28px; color: var(--muted); text-align: center; font-size: 14px; }
+    .loading[hidden] { display: none; }
+    .status { min-height: 22px; padding: 0 16px 12px; color: var(--muted); font-size: 11px; }
+    .footer { padding: 0 2px; margin-top: 13px; color: #6b7c88; font-size: 11px; line-height: 1.5; }
+    .footer kbd { padding: 2px 5px; border: 1px solid #d3dfe3; border-radius: 4px; background: #fff; color: #40596a; font: inherit; }
+    @media (max-width: 900px) {
+      .shell { width: min(100% - 20px, 1680px); margin: 10px auto; }
+      .hero { align-items: flex-start; flex-direction: column; gap: 10px; }
+      .toolbar { align-items: flex-start; }
+      .selector-group { width: 100%; }
+      .viewport { height: 70vh; min-height: 520px; }
+      .view-note { align-items: flex-start; flex-direction: column; }
+      input[type="range"] { width: 82px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">WOC · ARISE · Coastal Resilience Scorecard</p>
+        <h1>Interactive workflow explorer</h1>
+        <p class="lede">Follow the access, assessment, administration, and application-architecture flows. Drag to pan, use the toolbar to zoom, or fit the whole diagram to the canvas.</p>
+      </div>
+      <a class="doc-link" href="CRS_Portal_User_Workflows_and_Architecture.md">Open the workflow specification ↗</a>
+    </header>
+
+    <section class="panel" aria-label="Workflow diagram explorer">
+      <div class="toolbar" role="toolbar" aria-label="Diagram navigation controls">
+        <div class="selector-group">
+          <label for="workflow">Workflow view</label>
+          <select id="workflow">
+            <option value="access">01 · Access request and sign-in</option>
+            <option value="assessment">02 · Self-assessment and privacy</option>
+            <option value="admin">03 · Administration workspace</option>
+            <option value="architecture">04 · Application architecture</option>
+          </select>
+        </div>
+        <div class="control-cluster" aria-label="Zoom controls">
+          <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+          <input id="zoom" type="range" min="20" max="250" step="5" value="100" aria-label="Diagram zoom">
+          <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+          <span class="zoom-readout" id="zoom-readout" aria-live="polite">100%</span>
+          <button id="fit" type="button" title="Fit diagram to view">Fit</button>
+          <button id="reset" type="button" title="Reset zoom and pan">Reset</button>
+        </div>
+        <span class="divider" aria-hidden="true"></span>
+        <div class="panpad" role="group" aria-label="Pan diagram">
+          <button class="up" type="button" data-pan="up" aria-label="Pan up" title="Pan up">↑</button>
+          <button class="left" type="button" data-pan="left" aria-label="Pan left" title="Pan left">←</button>
+          <button class="down" type="button" data-pan="down" aria-label="Pan down" title="Pan down">↓</button>
+          <button class="right" type="button" data-pan="right" aria-label="Pan right" title="Pan right">→</button>
+        </div>
+      </div>
+      <div class="view-note">
+        <div><strong>Navigate:</strong> drag to pan · scroll to zoom · focus the canvas and use arrow keys, <kbd>+</kbd>/<kbd>−</kbd>, or <kbd>Home</kbd> to fit.</div>
+        <div class="legend" aria-label="Diagram color legend">
+          <span><i class="swatch"></i>Pages and actions</span>
+          <span><i class="swatch decision"></i>Decision points</span>
+          <span><i class="swatch state"></i>Account and request states</span>
+          <span><i class="swatch mail"></i>Email or integration</span>
+        </div>
+      </div>
+      <div id="viewport" class="viewport" tabindex="0" role="application" aria-label="Interactive Mermaid diagram. Drag to pan, use arrow keys to move, and use plus and minus to zoom.">
+        <div id="diagram" aria-live="polite"></div>
+        <div id="loading" class="loading">Loading the Mermaid diagram renderer…</div>
+      </div>
+      <div id="status" class="status" role="status" aria-live="polite">Preparing workflow diagram…</div>
+    </section>
+    <p class="footer">The Markdown specification remains the readable workflow reference. This companion uses Mermaid for rendering and adds pointer, keyboard, zoom, and pan controls for large diagrams. If the Mermaid CDN is unavailable, reopen this page with internet access or use the Mermaid source blocks in the Markdown file.</p>
+  </main>
+
+  <script>
+    const diagrams = {
+      access: `flowchart TB
+    VISITOR([Visitor]) --> LANDING[Public landing page]
+    LANDING -->|Explore| ESSENTIALS[Ten Essentials]
+    ESSENTIALS --> DETAIL[Hover, focus, or tap<br/>to view quick detail]
+    LANDING -->|Request Access| FORM[Complete request form<br/>First name · Last name · Email<br/>Organization type · Organization name<br/>Password · Confirm password]
+    FORM --> OTP_SEND[Request email verification code]
+    OTP_SEND --> OTP_ENTRY[Enter six-digit code]
+    OTP_ENTRY --> OTP_OK{Email verified?}
+    OTP_OK -->|No| OTP_RETRY[Show guidance<br/>allow retry or resend]
+    OTP_RETRY --> OTP_ENTRY
+    OTP_OK -->|Yes| REQUEST_RECORD[Create pending access-request record]
+    REQUEST_RECORD --> RECEIPT[Show request received<br/>send requester confirmation email]
+    REQUEST_RECORD -. Expected alert to Super Admin<br/>and all Administrators .-> ADMIN_ALERT[Email new-request alert]
+    RECEIPT -->|Back to sign in| LOGIN
+    LANDING -->|Sign in| LOGIN[Shared sign-in form<br/>for all roles]
+    INVITE[Administrator creates invitation<br/>OTP not used] --> SETUP[Send account setup link<br/>same email · link expires in 7 days]
+    SETUP --> ACTIVATE[Invitee sets password]
+    ACTIVATE --> LOGIN
+    LOGIN --> AUTH{Account or request state?}
+    AUTH -->|Pending request| PENDING[Access-status page<br/>Pending review]
+    AUTH -->|Rejected request| REJECTED[Access-status page<br/>Rejection message]
+    AUTH -->|Approved account| ROLE{Assigned role?}
+    AUTH -->|Deactivated| BLOCK[Sign-in denied<br/>account is deactivated]
+    ROLE -->|User| ASSESSMENT[Open self-assessment workspace]
+    ROLE -->|Administrator| ADMIN[Open administration workspace]
+    ROLE -->|Super Admin| ADMIN
+    ADMIN --> QUEUE[Access Requests queue]
+    QUEUE --> DECISION{Administrator decision}
+    DECISION -->|Accept| APPROVE[Create approved user account<br/>retain request decision]
+    APPROVE --> APPROVED_EMAIL[Send approval / setup guidance]
+    DECISION -->|Reject| REASON[Record rejection reason]
+    REASON --> REJECT[Mark request rejected]
+    REJECT --> REJECT_EMAIL[Send rejection and reason]
+    APPROVE --> LOGIN
+    REJECT --> LOGIN
+    classDef start fill:#E8F3F5,stroke:#147D85,color:#123B48,stroke-width:1.5px;
+    classDef page fill:#F4F7FA,stroke:#547188,color:#20384A,stroke-width:1.2px;
+    classDef decision fill:#FFF4DF,stroke:#C48724,color:#503713,stroke-width:1.5px;
+    classDef state fill:#EAF5EE,stroke:#3D805C,color:#1D432F,stroke-width:1.4px;
+    classDef mail fill:#F1EEF8,stroke:#7864A2,color:#332748,stroke-width:1.2px;
+    class VISITOR,LANDING,ESSENTIALS,DETAIL start;
+    class FORM,OTP_SEND,OTP_ENTRY,OTP_RETRY,RECEIPT,LOGIN,SETUP,ACTIVATE,ADMIN,QUEUE,ASSESSMENT page;
+    class OTP_OK,AUTH,ROLE,DECISION decision;
+    class REQUEST_RECORD,PENDING,REJECTED,BLOCK,APPROVE,REASON,REJECT state;
+    class ADMIN_ALERT,APPROVED_EMAIL,REJECT_EMAIL mail;
+    linkStyle default stroke:#8093A0,stroke-width:1.3px;`,
+      assessment: `flowchart LR
+    APPROVED[Approved User signs in] --> ASSESS[Assessment workspace<br/>Ten Essentials · 53 questions]
+    ASSESS --> SCORE[Score each question 0–5]
+    SCORE --> NOTES[Optionally record notes<br/>and action items]
+    NOTES --> SAVE[Save assessment]
+    SAVE --> COMPLETE{All required scores entered?}
+    COMPLETE -->|No| PROGRESS[Show completion progress<br/>keep results locked]
+    PROGRESS --> ASSESS
+    COMPLETE -->|Yes| RESULTS[Open saved results]
+    RESULTS --> SUMMARY[Summary<br/>scores, averages, ranges, priorities]
+    RESULTS --> VIZ[Visualization<br/>Essential heatmap, range-petal profile,<br/>ranked Essentials]
+    RESULTS --> REPORT[Generate illustrative<br/>improvement report]
+    SUMMARY --> PRIVACY[Privacy & data centre]
+    VIZ --> PRIVACY
+    REPORT --> PRIVACY
+    PRIVACY --> REQUEST{Choose data request}
+    REQUEST -->|Export| EXPORT[Submit export request]
+    REQUEST -->|Correction| CORRECT[Select saved scorecard<br/>describe requested change]
+    REQUEST -->|Deletion| DELETE[Select saved scorecard<br/>describe deletion request]
+    EXPORT --> QUEUE[Administrator privacy queue]
+    CORRECT --> QUEUE
+    DELETE --> QUEUE
+    QUEUE --> REVIEW{Review outcome}
+    REVIEW -->|Mark in review| IN_REVIEW[Status: In review]
+    IN_REVIEW --> REVIEW
+    REVIEW -->|Complete export| READY[Export becomes downloadable]
+    REVIEW -->|Approve correction| ONE_EDIT[Grant one scorecard edit]
+    ONE_EDIT --> RESAVE[User edits and saves once]
+    RESAVE --> LOCK[Assessment locks again]
+    REVIEW -->|Complete deletion| REMOVE[Delete selected scorecard<br/>and its report]
+    REVIEW -->|Reject| CLOSED[Status: Rejected]
+    classDef user fill:#E8F3F5,stroke:#147D85,color:#123B48,stroke-width:1.4px;
+    classDef action fill:#F4F7FA,stroke:#547188,color:#20384A,stroke-width:1.2px;
+    classDef decision fill:#FFF4DF,stroke:#C48724,color:#503713,stroke-width:1.4px;
+    classDef state fill:#EAF5EE,stroke:#3D805C,color:#1D432F,stroke-width:1.3px;
+    class APPROVED,ASSESS,SCORE,NOTES,SAVE,RESULTS,SUMMARY,VIZ,REPORT,PRIVACY user;
+    class PROGRESS,EXPORT,CORRECT,DELETE,QUEUE,IN_REVIEW,READY,ONE_EDIT,RESAVE,LOCK,REMOVE,CLOSED action;
+    class COMPLETE,REQUEST,REVIEW decision;
+    linkStyle default stroke:#8093A0,stroke-width:1.3px;`,
+      admin: `flowchart TB
+    ADMIN([Administrator or Super Admin]) --> AUTH[Shared sign-in<br/>role and account checks]
+    AUTH --> CONSOLE[Administration workspace]
+    CONSOLE --> TABS{Choose section}
+    TABS --> ACCESS[Access requests]
+    ACCESS --> LIST[Review request details<br/>name · email · organization<br/>request date · status]
+    LIST --> PENDING{Request pending?}
+    PENDING -->|Yes| PICK[Select Accept or Reject]
+    PICK --> SAVE[Save decision]
+    SAVE --> ACCEPT[Create approved User account]
+    SAVE --> REJECT[Record rejected state<br/>and optional reason]
+    PENDING -->|Already decided| FOLLOWUP[Approved: Send email again<br/>Rejected: view reason]
+    FOLLOWUP --> CLEAR[Delete request record]
+    TABS --> USERS[All users]
+    USERS --> USER_ACTION{Authorized action}
+    USER_ACTION -->|Super Admin only| ROLE[Make User Administrator<br/>or revoke Administrator]
+    USER_ACTION -->|Administrator or Super Admin| ACCESS_STATE[Deactivate or activate account]
+    USER_ACTION -->|Administrator or Super Admin| DELETE_USER[Delete user, subject to safeguards]
+    TABS --> INVITE[Invite user]
+    INVITE --> INVITE_FORM[Enter email, name,<br/>organization, and role]
+    INVITE_FORM --> ACCOUNT[Create approved account<br/>and invitation record]
+    ACCOUNT --> SETUP[Create setup link<br/>expiry: 7 days]
+    SETUP --> INVITEE[Invitee sets password<br/>then signs in with same email]
+    TABS --> PRIVACY[Privacy requests]
+    PRIVACY --> TYPES[Export · correction · deletion]
+    TYPES --> REVIEW[Mark in review, reject,<br/>complete, or approve one edit]
+    REVIEW --> OUTCOME[Update request state<br/>and apply permitted scorecard action]
+    classDef role fill:#E8F3F5,stroke:#147D85,color:#123B48,stroke-width:1.5px;
+    classDef page fill:#F4F7FA,stroke:#547188,color:#20384A,stroke-width:1.2px;
+    classDef decision fill:#FFF4DF,stroke:#C48724,color:#503713,stroke-width:1.5px;
+    classDef outcome fill:#EAF5EE,stroke:#3D805C,color:#1D432F,stroke-width:1.3px;
+    class ADMIN,AUTH role;
+    class CONSOLE,TABS,ACCESS,LIST,USERS,INVITE,INVITE_FORM,PRIVACY,TYPES,REVIEW page;
+    class PENDING,USER_ACTION decision;
+    class PICK,SAVE,ACCEPT,REJECT,FOLLOWUP,CLEAR,ROLE,ACCESS_STATE,DELETE_USER,ACCOUNT,SETUP,INVITEE,OUTCOME outcome;
+    linkStyle default stroke:#8093A0,stroke-width:1.3px;`,
+      architecture: `flowchart LR
+    BROWSER[Browser UI<br/>Public landing · sign-in · assessment<br/>results · privacy centre · admin console]
+    NEXT[Next.js App Router<br/>React and TypeScript pages]
+    API[Server API routes<br/>Auth · access · users · invitations<br/>scorecards · reports · privacy]
+    AUTH[Authentication and permissions<br/>Session cookie · account state<br/>role-based authorization]
+    SERVICES[Workflow services<br/>Validation · decisions · audit<br/>scorecard and privacy rules]
+    DB[(Database adapter<br/>SQLite for local development<br/>PostgreSQL supported)]
+    MAIL[Email adapter<br/>Configured delivery or log fallback]
+    EXPORT[Report and data export<br/>JSON / downloadable output]
+    BROWSER --> NEXT
+    NEXT --> API
+    API --> AUTH
+    API --> SERVICES
+    AUTH --> DB
+    SERVICES --> DB
+    SERVICES --> MAIL
+    SERVICES --> EXPORT
+    EXPORT --> BROWSER
+    classDef ui fill:#E8F3F5,stroke:#147D85,color:#123B48,stroke-width:1.5px;
+    classDef app fill:#F4F7FA,stroke:#547188,color:#20384A,stroke-width:1.2px;
+    classDef service fill:#EAF5EE,stroke:#3D805C,color:#1D432F,stroke-width:1.3px;
+    classDef store fill:#FFF4DF,stroke:#C48724,color:#503713,stroke-width:1.4px;
+    classDef integration fill:#F1EEF8,stroke:#7864A2,color:#332748,stroke-width:1.2px;
+    class BROWSER ui;
+    class NEXT,API app;
+    class AUTH,SERVICES service;
+    class DB store;
+    class MAIL,EXPORT integration;
+    linkStyle default stroke:#8093A0,stroke-width:1.3px;`
+    };
+
+    const viewport = document.getElementById('viewport');
+    const diagramHost = document.getElementById('diagram');
+    const loading = document.getElementById('loading');
+    const status = document.getElementById('status');
+    const selector = document.getElementById('workflow');
+    const zoomSlider = document.getElementById('zoom');
+    const zoomReadout = document.getElementById('zoom-readout');
+    let scale = 1;
+    let tx = 0;
+    let ty = 0;
+    let svgWidth = 1;
+    let svgHeight = 1;
+    let drag = null;
+    let renderRevision = 0;
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      themeVariables: {
+        fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+        fontSize: '14px',
+        primaryColor: '#f4f7fa',
+        primaryTextColor: '#20384a',
+        primaryBorderColor: '#547188',
+        lineColor: '#8093a0',
+        secondaryColor: '#e8f3f5',
+        tertiaryColor: '#fff4df',
+        background: '#f8fbfc',
+        mainBkg: '#f4f7fa',
+        nodeBorder: '#547188',
+        clusterBkg: '#f8fbfc',
+        clusterBorder: '#d8e3e8',
+        edgeLabelBackground: '#ffffff'
+      },
+      flowchart: { htmlLabels: true, curve: 'basis', nodeSpacing: 38, rankSpacing: 48, padding: 16 }
+    });
+
+    function updateTransform() {
+      diagramHost.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+      zoomSlider.value = String(Math.round(scale * 100));
+      zoomReadout.textContent = `${Math.round(scale * 100)}%`;
+    }
+
+    function fitView() {
+      const bounds = viewport.getBoundingClientRect();
+      const padding = 48;
+      scale = Math.max(.2, Math.min(2.5, Math.min((bounds.width - padding * 2) / svgWidth, (bounds.height - padding * 2) / svgHeight)));
+      tx = (bounds.width - svgWidth * scale) / 2;
+      ty = (bounds.height - svgHeight * scale) / 2;
+      updateTransform();
+    }
+
+    function zoomAt(pointX, pointY, nextScale) {
+      const clamped = Math.max(.2, Math.min(2.5, nextScale));
+      const ratio = clamped / scale;
+      tx = pointX - (pointX - tx) * ratio;
+      ty = pointY - (pointY - ty) * ratio;
+      scale = clamped;
+      updateTransform();
+    }
+
+    async function renderDiagram(name) {
+      const revision = ++renderRevision;
+      loading.hidden = false;
+      loading.textContent = 'Rendering workflow diagram…';
+      diagramHost.innerHTML = '';
+      status.textContent = 'Preparing workflow diagram…';
+      try {
+        const result = await mermaid.render(`crs-flow-${revision}`, diagrams[name]);
+        if (revision !== renderRevision) return;
+        diagramHost.innerHTML = result.svg;
+        const svg = diagramHost.querySelector('svg');
+        if (!svg) throw new Error('The diagram renderer returned no SVG.');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', selector.options[selector.selectedIndex].text);
+        const viewBox = svg.viewBox.baseVal;
+        svgWidth = viewBox.width || Number(svg.getAttribute('width')) || 1200;
+        svgHeight = viewBox.height || Number(svg.getAttribute('height')) || 800;
+        svg.style.width = `${svgWidth}px`;
+        svg.style.height = `${svgHeight}px`;
+        loading.hidden = true;
+        status.textContent = `${selector.options[selector.selectedIndex].text} · drag to pan, scroll or use controls to zoom`;
+        requestAnimationFrame(fitView);
+      } catch (error) {
+        loading.hidden = false;
+        loading.textContent = 'The diagram could not be rendered. Reopen this page with internet access to load Mermaid, or open the Mermaid source blocks in the Markdown specification.';
+        status.textContent = 'Mermaid renderer unavailable.';
+        console.error(error);
+      }
+    }
+
+    function pan(dx, dy) { tx += dx; ty += dy; updateTransform(); }
+
+    selector.addEventListener('change', () => renderDiagram(selector.value));
+    document.getElementById('zoom-in').addEventListener('click', () => {
+      const rect = viewport.getBoundingClientRect();
+      zoomAt(rect.width / 2, rect.height / 2, scale * 1.18);
+    });
+    document.getElementById('zoom-out').addEventListener('click', () => {
+      const rect = viewport.getBoundingClientRect();
+      zoomAt(rect.width / 2, rect.height / 2, scale / 1.18);
+    });
+    document.getElementById('fit').addEventListener('click', fitView);
+    document.getElementById('reset').addEventListener('click', fitView);
+    zoomSlider.addEventListener('input', () => {
+      const rect = viewport.getBoundingClientRect();
+      zoomAt(rect.width / 2, rect.height / 2, Number(zoomSlider.value) / 100);
+    });
+    document.querySelectorAll('[data-pan]').forEach((button) => button.addEventListener('click', () => {
+      const delta = 90;
+      const directions = { up: [0, delta], down: [0, -delta], left: [delta, 0], right: [-delta, 0] };
+      pan(...directions[button.dataset.pan]);
+    }));
+
+    viewport.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+      zoomAt(event.clientX - rect.left, event.clientY - rect.top, scale * factor);
+    }, { passive: false });
+    viewport.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || event.target.closest('button, a, select, input')) return;
+      drag = { x: event.clientX, y: event.clientY, tx, ty, pointerId: event.pointerId };
+      viewport.classList.add('is-panning');
+      viewport.setPointerCapture(event.pointerId);
+    });
+    viewport.addEventListener('pointermove', (event) => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      tx = drag.tx + event.clientX - drag.x;
+      ty = drag.ty + event.clientY - drag.y;
+      updateTransform();
+    });
+    function stopDrag(event) {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      drag = null;
+      viewport.classList.remove('is-panning');
+    }
+    viewport.addEventListener('pointerup', stopDrag);
+    viewport.addEventListener('pointercancel', stopDrag);
+    viewport.addEventListener('keydown', (event) => {
+      const step = event.shiftKey ? 140 : 80;
+      const moves = { ArrowUp: [0, step], ArrowDown: [0, -step], ArrowLeft: [step, 0], ArrowRight: [-step, 0] };
+      if (moves[event.key]) { event.preventDefault(); pan(...moves[event.key]); }
+      else if (event.key === '+' || event.key === '=') { event.preventDefault(); document.getElementById('zoom-in').click(); }
+      else if (event.key === '-') { event.preventDefault(); document.getElementById('zoom-out').click(); }
+      else if (event.key === 'Home') { event.preventDefault(); fitView(); }
+    });
+    window.addEventListener('resize', () => requestAnimationFrame(fitView));
+
+    if (window.mermaid) renderDiagram(selector.value);
+    else {
+      loading.textContent = 'The Mermaid renderer could not be loaded. Reopen this page with internet access, or use the Mermaid source blocks in the Markdown specification.';
+      status.textContent = 'Mermaid renderer unavailable.';
+    }
+  </script>
+</body>
+</html>
